@@ -177,7 +177,7 @@ public class WMDatabase {
     }
 
     public void transaction(TransactionFunction function) {
-        db.beginTransaction();
+        db.beginTransactionNonExclusive();
         try {
             function.applyTransactionFunction();
             db.setTransactionSuccessful();

@@ -146,7 +146,7 @@ class Database private constructor(private val db: SQLiteDatabase) {
     }
 
     fun transaction(function: () -> Unit) {
-        db.beginTransaction()
+        db.beginTransactionNonExclusive()
         try {
             function()
             db.setTransactionSuccessful()

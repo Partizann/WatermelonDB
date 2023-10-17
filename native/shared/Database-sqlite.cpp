@@ -252,11 +252,7 @@ jsi::Array Database::resultColumns(sqlite3_stmt *statement) {
 }
 
 void Database::beginTransaction() {
-    // NOTE: using exclusive transaction, because that's what FMDB does
-    // In theory, `deferred` seems better, since it's less likely to get locked
-    // OTOH, we don't really do multithreaded access, and when we *do*, we'd either
-    // use a serial queue (easiest) or have to do a lot more work to avoid locking
-    executeUpdate("begin exclusive transaction");
+    executeUpdate("begin transaction");
 }
 
 void Database::commit() {

@@ -1342,7 +1342,7 @@ int FMDBExecuteBulkSQLCallback(void *theBlockAsVoid, int columns, char **values,
 
 - (BOOL)beginTransaction {
     
-    BOOL b = [self executeUpdate:@"begin exclusive transaction"];
+    BOOL b = [self executeUpdate:@"begin transaction"];
     if (b) {
         _isInTransaction = YES;
     }

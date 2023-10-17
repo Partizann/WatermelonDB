@@ -43,31 +43,19 @@ class DatabaseDriver {
         self.database = Database(path: getPath(dbName: dbName))
     }
 
-    func find(table: Database.TableName, id: RecordId) throws -> Any? {
-        guard !isCached(table, id) else {
-            return id
-        }
-
+    func find(table: Database.TableName, id: String) throws -> Any? {
         let results = try database.queryRaw("select * from `\(table)` where id == ? limit 1", [id])
 
         guard let record = results.next() else {
             return nil
         }
 
-        markAsCached(table, id)
         return record.resultDictionary!
     }
 
     func cachedQuery(table: Database.TableName, query: Database.SQL, args: Database.QueryArgs = []) throws -> [Any] {
         return try database.queryRaw(query, args).map { row in
-            let id = row.string(forColumn: "id")!
-
-            if isCached(table, id) {
-                return id
-            } else {
-                markAsCached(table, id)
-                return row.resultDictionary!
-            }
+            return row.resultDictionary!
         }
     }
 
@@ -100,34 +88,12 @@ class DatabaseDriver {
     }
 
     func batch(_ operations: [Operation]) throws {
-        var newIds: [(Database.TableName, RecordId)] = []
-        var removedIds: [(Database.TableName, RecordId)] = []
-
         try database.inTransaction {
             for operation in operations {
                 for args in operation.argBatches {
                     try database.execute(operation.sql, args)
-
-                    switch operation.cacheBehavior {
-                    case .addFirstArg(table: let table):
-                        // swiftlint:disable:next force_cast
-                        newIds.append((table, id: args[0] as! String))
-                    case .removeFirstArg(table: let table):
-                        // swiftlint:disable:next force_cast
-                        removedIds.append((table, id: args[0] as! String))
-                    case .ignore:
-                        break
-                    }
                 }
             }
-        }
-
-        for (table, id) in newIds {
-            markAsCached(table, id)
-        }
-
-        for (table, id) in removedIds {
-            removeFromCache(table, id)
         }
     }
 
@@ -141,38 +107,6 @@ class DatabaseDriver {
         }
 
         return record.string(forColumn: "value")!
-    }
-
-// MARK: - Record caching
-
-    typealias RecordId = String
-
-    // Rewritten to use good ol' mutable Objective C for performance
-    // The swifty implementation in debug took >100s to execute on a 65K batch. This: 6ms. Yes. Really.
-    private var cachedRecords: NSMutableDictionary /* [TableName: Set<RecordId>] */ = NSMutableDictionary()
-
-    func isCached(_ table: Database.TableName, _ id: RecordId) -> Bool {
-        if let set = cachedRecords[table] as? NSSet {
-            return set.contains(id)
-        }
-        return false
-    }
-
-    private func markAsCached(_ table: Database.TableName, _ id: RecordId) {
-        var cachedSet: NSMutableSet
-        if let set = cachedRecords[table] as? NSMutableSet {
-            cachedSet = set
-        } else {
-            cachedSet = NSMutableSet()
-            cachedRecords[table] = cachedSet
-        }
-        cachedSet.add(id)
-    }
-
-    private func removeFromCache(_ table: Database.TableName, _ id: RecordId) {
-        if let set = cachedRecords[table] as? NSMutableSet {
-            set.remove(id)
-        }
     }
 
 // MARK: - Other private details
@@ -199,7 +133,6 @@ class DatabaseDriver {
 
     func unsafeResetDatabase(schema: Schema) throws {
         try database.unsafeDestroyEverything()
-        cachedRecords = [:]
 
         try database.inTransaction {
             try database.executeStatements(schema.sql)

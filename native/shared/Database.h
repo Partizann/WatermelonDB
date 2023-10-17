@@ -48,7 +48,6 @@ private:
     jsi::Runtime *runtime_; // TODO: std::shared_ptr would be better, but I don't know how to make it from void* in RCTCxxBridge
     std::unique_ptr<SqliteDb> db_;
     std::unordered_map<std::string, sqlite3_stmt *> cachedStatements_; // NOTE: may contain null pointers!
-    std::unordered_set<std::string> cachedRecords_;
 
     jsi::Runtime &getRt();
     jsi::JSError dbError(std::string description);
@@ -74,14 +73,6 @@ private:
     int getUserVersion();
     void setUserVersion(int newVersion);
     void migrate(jsi::String &migrationSql, int fromVersion, int toVersion);
-
-    bool isCached(std::string cacheKey);
-    void markAsCached(std::string cacheKey);
-    void removeFromCache(std::string cacheKey);
 };
-
-inline std::string cacheKey(std::string tableName, std::string recordId) {
-    return tableName + "$" + recordId; // NOTE: safe as long as table names cannot contain $ sign
-}
 
 } // namespace watermelondb

@@ -115,7 +115,7 @@ extension DatabaseBridge {
     @objc(find:table:id:resolve:reject:)
     func find(tag: ConnectionTag,
               table: Database.TableName,
-              id: DatabaseDriver.RecordId,
+              id: String,
               resolve: @escaping RCTPromiseResolveBlock, reject: @escaping RCTPromiseRejectBlock) {
         withDriver(tag, resolve, reject) {
             try $0.find(table: table, id: id) as Any

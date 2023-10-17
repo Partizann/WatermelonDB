@@ -8,7 +8,6 @@
 {
     if (self = [super init]) {
         _db = [WMDatabase databaseWithPath:[self pathForName:dbName]];
-        _cachedRecords = [NSMutableDictionary dictionary];
     }
 
     return self;
@@ -92,10 +91,6 @@
 
 - (id) find:(NSString *)table id:(NSString *)id error:(NSError **)errorPtr
 {
-    if ([self isCached:table id:id]) {
-        return id;
-    }
-
     NSString *query = [NSString stringWithFormat:@"select * from `%@` where id == ? limit 1", table];
     FMResultSet *result = [_db queryRaw:query args:@[id] error:errorPtr];
     if (!result) {
@@ -106,7 +101,6 @@
         return [NSNull null];
     }
 
-    [self markAsCached:table id:id];
     return [result resultDictionary];
 }
 
@@ -119,13 +113,7 @@
     }
 
     while ([result next]) {
-        NSString *id = [result stringForColumn:@"id"];
-        if ([self isCached:table id:id]) {
-            [resultArray addObject:id];
-        } else {
-            [self markAsCached:table id:id];
-            [resultArray addObject:[result resultDictionary]];
-        }
+        [resultArray addObject:[result resultDictionary]];
     }
 
     return resultArray;
@@ -169,27 +157,15 @@
 // Look for NativeBridgeBatchOperation type
 - (BOOL) batch:(NSArray<NSArray *> *)operations error:(NSError **)errorPtr
 {
-    // TODO: Refactor for perf to use cacheKeys ala Database.cpp ?
-    NSMutableArray *addedIds = [NSMutableArray array];
-    NSMutableArray *removedIds = [NSMutableArray array];
-
     __block WMDatabase *db = _db;
     BOOL txnResult = [db inTransaction:^BOOL(NSError **innerErrorPtr) {
         for (NSArray *operation in operations) {
-            NSNumber *cacheBehavior = operation[0];
-            NSString *table = operation[1];
             NSString *sql = operation[2];
             NSArray *argBatches = operation[3];
 
             for (NSArray *args in argBatches) {
                 if (![db executeQuery:sql args:args error:innerErrorPtr]) {
                     return NO;
-                }
-
-                if (cacheBehavior.intValue == 1) {
-                    [addedIds addObject:@[table, args[0]]];
-                } else if (cacheBehavior.intValue == -1) {
-                    [removedIds addObject:@[table, args[0]]];
                 }
             }
         }
@@ -199,14 +175,6 @@
 
     if (!txnResult) {
         return NO;
-    }
-
-    for (NSArray *pair in addedIds) {
-        [self markAsCached:pair[0] id:pair[1]];
-    }
-
-    for (NSArray *pair in removedIds) {
-        [self removeFromCache:pair[0] id:pair[1]];
     }
 
     return YES;
@@ -233,7 +201,6 @@
     if (![_db unsafeDestroyEverything:errorPtr]) {
         return NO;
     }
-    _cachedRecords = [NSMutableDictionary dictionary];
 
     __block WMDatabase *db = _db;
     BOOL txnResult = [db inTransaction:^BOOL(NSError **innerErrorPtr) {
@@ -246,31 +213,6 @@
     } error:errorPtr];
 
     return txnResult;
-}
-
-#pragma mark - Record caching
-
-- (BOOL) isCached:(NSString *)table id:(NSString *)id
-{
-    if ([_cachedRecords[table] containsObject:id]) {
-        return YES;
-    }
-    return NO;
-}
-
-- (void) markAsCached:(NSString *)table id:(NSString *)id
-{
-    NSMutableSet *set = _cachedRecords[table];
-    if (!set) {
-        set = [NSMutableSet set];
-        _cachedRecords[table] = set;
-    }
-    [set addObject:id];
-}
-
-- (void) removeFromCache:(NSString *)table id:(NSString *)id
-{
-    [_cachedRecords[table] removeObject:id];
 }
 
 @end

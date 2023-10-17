@@ -11,7 +11,6 @@ typedef NS_ENUM(NSInteger, WMDatabaseCompatibility) {
 @interface WMDatabaseDriver : NSObject
 
 @property (readwrite, strong, nonatomic) WMDatabase *db;
-@property (readonly, strong, nonatomic) NSMutableDictionary<NSString *, NSMutableSet<NSString *> *> *cachedRecords;
 
 #pragma mark - Initialization
 

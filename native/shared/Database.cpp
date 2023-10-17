@@ -52,19 +52,8 @@ Database::~Database() {
     destroy();
 }
 
-bool Database::isCached(std::string cacheKey) {
-    return cachedRecords_.find(cacheKey) != cachedRecords_.end();
-}
-void Database::markAsCached(std::string cacheKey) {
-    cachedRecords_.insert(cacheKey);
-}
-void Database::removeFromCache(std::string cacheKey) {
-    cachedRecords_.erase(cacheKey);
-}
-
 void Database::unsafeResetDatabase(jsi::String &schema, int schemaVersion) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     // TODO: in non-memory mode, just delete the DB files
     // NOTE: As of iOS 14, selecting tables from sqlite_master and deleting them does not work
@@ -83,8 +72,6 @@ void Database::unsafeResetDatabase(jsi::String &schema, int schemaVersion) {
 
     beginTransaction();
     try {
-        cachedRecords_ = {};
-
         // Reinitialize schema
         executeMultiple(schema.utf8(rt));
         setUserVersion(schemaVersion);
@@ -98,7 +85,6 @@ void Database::unsafeResetDatabase(jsi::String &schema, int schemaVersion) {
 
 void Database::migrate(jsi::String &migrationSql, int fromVersion, int toVersion) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     beginTransaction();
     try {

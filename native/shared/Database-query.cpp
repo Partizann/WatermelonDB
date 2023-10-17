@@ -9,11 +9,6 @@ using platform::consoleLog;
 
 jsi::Value Database::find(jsi::String &tableName, jsi::String &id) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
-
-    if (isCached(cacheKey(tableName.utf8(rt), id.utf8(rt)))) {
-        return std::move(id);
-    }
 
     auto args = jsi::Array::createWithElements(rt, id);
     auto statement = executeQuery("select * from `" + tableName.utf8(rt) + "` where id == ? limit 1", args);
@@ -23,15 +18,11 @@ jsi::Value Database::find(jsi::String &tableName, jsi::String &id) {
     }
 
     auto record = resultDictionary(statement.stmt);
-
-    markAsCached(cacheKey(tableName.utf8(rt), id.utf8(rt)));
-
     return record;
 }
 
 jsi::Value Database::query(jsi::String &tableName, jsi::String &sql, jsi::Array &arguments) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto statement = executeQuery(sql.utf8(rt), arguments);
     std::vector<jsi::Value> records = {};
@@ -48,14 +39,8 @@ jsi::Value Database::query(jsi::String &tableName, jsi::String &sql, jsi::Array 
             throw jsi::JSError(rt, "Failed to get ID of a record");
         }
 
-        if (isCached(cacheKey(tableName.utf8(rt), std::string(id)))) {
-            jsi::String jsiId = jsi::String::createFromAscii(rt, id);
-            records.push_back(std::move(jsiId));
-        } else {
-            markAsCached(cacheKey(tableName.utf8(rt), std::string(id)));
-            jsi::Object record = resultDictionary(statement.stmt);
-            records.push_back(std::move(record));
-        }
+        jsi::Object record = resultDictionary(statement.stmt);
+        records.push_back(std::move(record));
     }
 
     return arrayFromStd(records);
@@ -63,7 +48,6 @@ jsi::Value Database::query(jsi::String &tableName, jsi::String &sql, jsi::Array 
 
 jsi::Value Database::queryAsArray(jsi::String &tableName, jsi::String &sql, jsi::Array &arguments) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto statement = executeQuery(sql.utf8(rt), arguments);
     std::vector<jsi::Value> results = {};
@@ -85,14 +69,8 @@ jsi::Value Database::queryAsArray(jsi::String &tableName, jsi::String &sql, jsi:
             results.push_back(std::move(columns));
         }
 
-        if (isCached(cacheKey(tableName.utf8(rt), std::string(id)))) {
-            jsi::String jsiId = jsi::String::createFromAscii(rt, id);
-            results.push_back(std::move(jsiId));
-        } else {
-            markAsCached(cacheKey(tableName.utf8(rt), std::string(id)));
-            jsi::Array record = resultArray(statement.stmt);
-            results.push_back(std::move(record));
-        }
+        jsi::Array record = resultArray(statement.stmt);
+        results.push_back(std::move(record));
     }
 
     return arrayFromStd(results);
@@ -100,7 +78,6 @@ jsi::Value Database::queryAsArray(jsi::String &tableName, jsi::String &sql, jsi:
 
 jsi::Array Database::queryIds(jsi::String &sql, jsi::Array &arguments) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto statement = executeQuery(sql.utf8(rt), arguments);
     std::vector<jsi::Value> ids = {};
@@ -126,7 +103,6 @@ jsi::Array Database::queryIds(jsi::String &sql, jsi::Array &arguments) {
 
 jsi::Array Database::unsafeQueryRaw(jsi::String &sql, jsi::Array &arguments) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto statement = executeQuery(sql.utf8(rt), arguments);
     std::vector<jsi::Value> raws = {};
@@ -145,7 +121,6 @@ jsi::Array Database::unsafeQueryRaw(jsi::String &sql, jsi::Array &arguments) {
 
 jsi::Value Database::count(jsi::String &sql, jsi::Array &arguments) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto statement = executeQuery(sql.utf8(rt), arguments);
     getRow(statement.stmt);
@@ -157,7 +132,6 @@ jsi::Value Database::count(jsi::String &sql, jsi::Array &arguments) {
 
 jsi::Value Database::getLocal(jsi::String &key) {
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
 
     auto args = jsi::Array::createWithElements(rt, key);
     auto statement = executeQuery("select value from local_storage where key = ?", args);

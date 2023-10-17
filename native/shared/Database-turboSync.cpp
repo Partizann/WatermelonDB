@@ -65,7 +65,6 @@ std::string insertSqlFor(jsi::Runtime &rt, std::string tableName, TableSchemaArr
 jsi::Value Database::unsafeLoadFromSync(int jsonId, jsi::Object &schema, std::string preamble, std::string postamble) {
     using namespace simdjson;
     auto &rt = getRt();
-    const std::lock_guard<std::mutex> lock(mutex_);
     beginTransaction();
 
     try {
@@ -117,7 +116,6 @@ jsi::Value Database::unsafeLoadFromSync(int jsonId, jsi::Object &schema, std::st
                         auto tableSchema = tableSchemas.second;
 
                         sqlite3_stmt *stmt = prepareQuery(insertSqlFor(rt, tableName, tableSchemaArray));
-                        SqliteStatement statement(stmt);
 
                         for (ondemand::object record : records) {
                             // TODO: It would be much more natural to iterate over schema, and then get json's field

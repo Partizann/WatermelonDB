@@ -47,7 +47,7 @@ using namespace facebook;
 #import <objc/message.h>
 
 namespace watermelondb {
-std::function<void (void)> *blockToExecute = nullptr;
+std::function<void (void)> blockToExecute = nullptr;
 bool didBlockExecuteUsingHack = false;
 
 void perfhackFail(NSString *whytho) {
@@ -69,11 +69,11 @@ void perfhackFail(NSString *whytho) {
     //        NSLog(@"WatermelonDB JSLock perfhack assertion failure - swizzled method called but block has already executed");
     //    }
 
-    if (blockToExecute && !didBlockExecuteUsingHack) {
+    if (blockToExecute) {
         // Call our block from within a JSLockHolding context, yay!
-        auto block = *blockToExecute;
+        blockToExecute();
+        blockToExecute = nullptr;
         didBlockExecuteUsingHack = true;
-        block();
     }
 
     // Proceed with original implementation
@@ -129,13 +129,13 @@ void watermelonCallWithJSCLockHolder(jsi::Runtime& rt, std::function<void (void)
     JSManagedValue *dummyValue = [JSManagedValue managedValueWithValue:[JSValue valueWithUndefinedInContext:context]];
 
     // trigger the swizzled version
-    blockToExecute = &block;
+    blockToExecute = block;
     didBlockExecuteUsingHack = false;
     // NOTE: https://sentry.nozbe.tv/organizations/sentry/issues/139/?project=2&query=is%3Aunresolved
     // There's a single instance of a crash here. Could be a fluke?
     [dummyValue value];
 
-    if (!didBlockExecuteUsingHack) {
+    if (blockToExecute) {
         perfhackFail(@"swizzled method did not call our block");
         blockToExecute = nullptr;
         block();

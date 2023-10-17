@@ -9,21 +9,30 @@ using platform::consoleError;
 using platform::consoleLog;
 
 sqlite3_stmt* Database::prepareQuery(std::string sql) {
-    sqlite3_stmt *statement = cachedStatements_[sql];
+    sqlite3_stmt *statement = nullptr;
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        statement = cachedStatements_[sql];
+    }
 
     if (statement == nullptr) {
-        int resultPrepare = sqlite3_prepare_v2(db_->sqlite, sql.c_str(), -1, &statement, nullptr);
+        int resultPrepare = SQLITE_OK;
+        if (__builtin_available(iOS 12.0, *)) {
+            resultPrepare = sqlite3_prepare_v3(db_->sqlite, sql.c_str(), -1, SQLITE_PREPARE_PERSISTENT, &statement, nullptr);
+        } else {
+            resultPrepare = sqlite3_prepare_v2(db_->sqlite, sql.c_str(), -1, &statement, nullptr);
+        }
 
         if (resultPrepare != SQLITE_OK) {
             sqlite3_finalize(statement);
             throw dbError("Failed to prepare query statement");
         }
 
-        cachedStatements_[sql] = statement;
+        {
+            const std::lock_guard<std::mutex> lock(mutex_);
+            cachedStatements_[sql] = statement;
+        }
     } else {
-        // in theory, this shouldn't be necessary, since statements ought to be reset *after* use, not before use
-        // but still this might prevent some crashes if this is not done right
-        // TODO: Remove this later - should not be necessary, and it wastes time
         sqlite3_reset(statement);
     }
     assert(statement != nullptr);
@@ -109,10 +118,10 @@ std::string Database::bindArgsAndReturnId(sqlite3_stmt *statement, simdjson::ond
     return returnId;
 }
 
-SqliteStatement Database::executeQuery(std::string sql, jsi::Array &arguments) {
+sqlite3_stmt* Database::executeQuery(std::string sql, jsi::Array &arguments) {
     auto statement = prepareQuery(sql);
     bindArgs(statement, arguments);
-    return SqliteStatement(statement);
+    return statement;
 }
 
 void Database::executeUpdate(sqlite3_stmt *statement) {
@@ -126,14 +135,15 @@ void Database::executeUpdate(sqlite3_stmt *statement) {
 void Database::executeUpdate(std::string sql, jsi::Array &args) {
     auto stmt = prepareQuery(sql);
     bindArgs(stmt, args);
-    SqliteStatement statement(stmt);
     executeUpdate(stmt);
+    sqlite3_reset(stmt);
+    sqlite3_clear_bindings(stmt);
 }
 
 void Database::executeUpdate(std::string sql) {
     auto stmt = prepareQuery(sql);
-    SqliteStatement statement(stmt);
     executeUpdate(stmt);
+    sqlite3_reset(stmt);
 }
 
 void Database::getRow(sqlite3_stmt *stmt) {
@@ -282,12 +292,12 @@ void Database::rollback() {
 int Database::getUserVersion() {
     auto &rt = getRt();
     auto args = jsi::Array::createWithElements(rt);
-    auto statement = executeQuery("pragma user_version", args);
-    getRow(statement.stmt);
+    auto stmt = executeQuery("pragma user_version", args);
+    getRow(stmt);
 
-    assert(sqlite3_data_count(statement.stmt) == 1);
+    assert(sqlite3_data_count(stmt) == 1);
 
-    int version = sqlite3_column_int(statement.stmt, 0);
+    int version = sqlite3_column_int(stmt, 0);
     return version;
 }
 

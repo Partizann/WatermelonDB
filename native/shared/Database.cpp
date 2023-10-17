@@ -34,17 +34,17 @@ Database::Database(jsi::Runtime *runtime, std::string path, bool usesExclusiveLo
 }
 
 void Database::destroy() {
-    const std::lock_guard<std::mutex> lock(mutex_);
-
     if (isDestroyed_) {
         return;
     }
     isDestroyed_ = true;
-    for (auto const &cachedStatement : cachedStatements_) {
-        sqlite3_stmt *statement = cachedStatement.second;
-        sqlite3_finalize(statement);
+
+    {
+        const std::lock_guard<std::mutex> lock(mutex_);
+        // Prepared statements will be finalized inside 'db_->destroy()' call
+        cachedStatements_ = {};
     }
-    cachedStatements_ = {};
+
     db_->destroy();
 }
 

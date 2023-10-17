@@ -1,6 +1,8 @@
 #include "Sqlite.h"
 #include "DatabasePlatform.h"
 #include <cassert>
+#include <algorithm>
+#include <forward_list>
 
 namespace watermelondb {
 
@@ -43,6 +45,7 @@ SqliteDb::SqliteDb(std::string path) {
 
 void SqliteDb::destroy() {
     if (isDestroyed_) {
+        consoleLog("Database is already closed");
         return;
     }
     consoleLog("Closing database...");
@@ -51,13 +54,12 @@ void SqliteDb::destroy() {
     assert(sqlite != nullptr);
 
     // Find and finalize all prepared statements
-    sqlite3_stmt *stmt;
-    while ((stmt = sqlite3_next_stmt(sqlite, nullptr))) {
-        consoleError("Leak detected! Finalized a statement when closing database - this means that there were dangling "
-                     "statements not held by cachedStatements, or handling of cachedStatements is broken. Please "
-                     "collect as much information as possible and file an issue with WatermelonDB repository!");
-        sqlite3_finalize(stmt);
+    std::forward_list<sqlite3_stmt*> list;
+    sqlite3_stmt *stmt = nullptr;
+    while ((stmt = sqlite3_next_stmt(sqlite, stmt))) {
+        list.emplace_front(stmt);
     }
+    std::for_each(list.begin(), list.end(), [](const auto &stmt) { sqlite3_finalize(stmt); });
 
     // Close connection
     // NOTE: Applications should finalize all prepared statements, close all BLOB handles, and finish all sqlite3_backup objects
@@ -67,31 +69,13 @@ void SqliteDb::destroy() {
         // NOTE: We're just gonna log an error. We can't throw an exception here. We could crash, but most likely we're
         // only leaking memory/resources
         consoleError("Failed to close sqlite database - " + std::string(sqlite3_errmsg(sqlite)));
+    } else {
+        consoleLog("Database closed.");
     }
-
-    consoleLog("Database closed.");
 }
 
 SqliteDb::~SqliteDb() {
     destroy();
-}
-
-SqliteStatement::SqliteStatement(sqlite3_stmt *statement) : stmt(statement) {
-}
-
-SqliteStatement::~SqliteStatement() {
-    reset();
-}
-
-void SqliteStatement::reset() {
-    if (stmt) {
-        // TODO: I'm confused by whether or not the return value of reset is relevant:
-        // If the most recent call to sqlite3_step(S) for the prepared statement S indicated an error, then
-        // sqlite3_reset(S) returns an appropriate error code. https://sqlite.org/c3ref/reset.html
-        sqlite3_reset(stmt);
-        sqlite3_clear_bindings(stmt); // might matter if storing a huge string/blob
-                                      //        consoleLog("statement has been reset!");
-    }
 }
 
 } // namespace watermelondb

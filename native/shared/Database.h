@@ -3,6 +3,7 @@
 #import <jsi/jsi.h>
 #import <unordered_map>
 #import <unordered_set>
+#import <memory>
 #import <mutex>
 #import <sqlite3.h>
 
@@ -42,8 +43,8 @@ public:
     void executeMultiple(std::string sql);
 
 private:
-    bool initialized_;
-    bool isDestroyed_;
+    std::atomic<bool> initialized_;
+    std::atomic<bool> isDestroyed_;
     std::mutex mutex_;
     jsi::Runtime *runtime_; // TODO: std::shared_ptr would be better, but I don't know how to make it from void* in RCTCxxBridge
     std::unique_ptr<SqliteDb> db_;
@@ -55,7 +56,7 @@ private:
     sqlite3_stmt* prepareQuery(std::string sql);
     void bindArgs(sqlite3_stmt *statement, jsi::Array &arguments);
     std::string bindArgsAndReturnId(sqlite3_stmt *statement, simdjson::ondemand::array &args);
-    SqliteStatement executeQuery(std::string sql, jsi::Array &arguments);
+    sqlite3_stmt* executeQuery(std::string sql, jsi::Array &arguments);
     void executeUpdate(sqlite3_stmt *statement);
     void executeUpdate(std::string sql, jsi::Array &arguments);
     void executeUpdate(std::string sql);

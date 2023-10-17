@@ -54,11 +54,11 @@ void Database::batchJSON(jsi::String &&jsiJson) {
                 } else if (fieldIdx == 3) {
                     ondemand::array argsBatches = field;
                     auto stmt = prepareQuery(sql);
-                    SqliteStatement statement(stmt);
 
                     for (ondemand::array args : argsBatches) {
                         executeUpdate(stmt);
                         sqlite3_reset(stmt);
+                        sqlite3_clear_bindings(stmt);
                     }
                 }
                 fieldIdx++;

@@ -1,5 +1,6 @@
 #pragma once
 
+#import <memory>
 #import <string>
 #import <sqlite3.h>
 
@@ -18,17 +19,7 @@ public:
     SqliteDb(const SqliteDb &) = delete;
 
 private:
-    bool isDestroyed_;
-};
-
-class SqliteStatement {
-public:
-    SqliteStatement(sqlite3_stmt *statement);
-    ~SqliteStatement();
-
-    sqlite3_stmt *stmt;
-
-    void reset();
+    std::atomic<bool> isDestroyed_;
 };
 
 } // namespace watermelondb

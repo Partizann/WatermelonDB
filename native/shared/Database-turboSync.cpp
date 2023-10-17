@@ -173,6 +173,7 @@ jsi::Value Database::unsafeLoadFromSync(int jsonId, jsi::Object &schema, std::st
 
                             executeUpdate(stmt);
                             sqlite3_reset(stmt);
+                            sqlite3_clear_bindings(stmt);
                         }
                     }
                 }
